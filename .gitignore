@@ -3,3 +3,8 @@
 
 # Data files
 dataset
+
+# trainer files
+model
+
+*.pyc
