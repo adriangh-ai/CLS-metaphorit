@@ -117,6 +117,7 @@ def hp_search(model_name, train, dev, search_space):
     max_score = float('-inf')
     best_hyperparameter = {'lr':0, 'epochs':0, 'batchsize':0}
     for lr, epoch, batchsize in product(*search_space.values()):
+        print(f'HP Search:\nLearning rate: {lr}\nEpoch: {epoch}\nBatchsize: {batchsize}')
         trial_hp = {'lr':lr, 'epochs':epoch, 'batchsize':batchsize}
         trainer = train_model(model_name, train, dev, trial_hp )
         results = trainer.evaluate()['eval_f1']
