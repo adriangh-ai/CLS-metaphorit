@@ -1,6 +1,6 @@
 # CLS-metaphorit
 
-This repository contains the code and results of our project on automatic metaphor detection using the BERT-based model. The goal of the project was to classify sentences as metaphorical or non-metaphorical.
+This repository contains the code and results of our project on automatic metaphor detection using the BERT-base-multilingual-cased model. The goal of the project was to classify sentences as metaphorical or non-metaphorical.
 
 ## Dataset
 
@@ -24,14 +24,13 @@ We used two datasets for this project, one with single annotator labels and the 
     | Yes                     | 156   |
     | Equal split: yes, no    | 41    |
 
-The input sentences in both datasets are in Italian and English.
 
 To tackle the metaphor detection task as a binary classification problem, we merge both datasets. This allows us to benefit greatly from each other as the datasets are skewed in different directions. After merging, the distribution of labels is as follows:
 
-    | Label | Count |
-    |-------|-------|
-    | No    | 454   |
-    | Yes   | 328   |
+| Label | Count |
+|-------|-------|
+| No    | 454   |
+| Yes   | 328   |
 
 For training and evaluating the model, random undersampling was performed to balance the dataset. Furthermore, we use an 80-10-10 random stratified train-dev-test split with a fixed seed for reproducibility.
 
@@ -41,7 +40,7 @@ We used the 'bert-base-multilingual-cased' model for this project. The model was
 
 ## Training
 
-The training procedure consists of the following steps:
+The training procedure was performed using HuggingFace Transformers library, and consists of the following steps:
 
 1. **Initialization**: We start with a pre-trained BERT model, specifically 'bert-base-multilingual-cased'. This model has been trained on a large corpus of multilingual data and has learned to generate useful language representations.
 
