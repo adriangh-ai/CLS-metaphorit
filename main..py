@@ -1,3 +1,13 @@
+"""
+Training and evaluation loop for the project of Automatic Metaphor Detection
+
+"""
+import evaluate
+
+import pandas as pd
+import torch
+import random
+
 from transformers import AutoModelForSequenceClassification
 from transformers import AutoTokenizer
 from transformers import DataCollatorWithPadding
@@ -5,32 +15,22 @@ from transformers import Trainer
 from transformers import TrainingArguments
 from transformers import logging
 
-from itertools import product
-
-import evaluate
-
-import pandas as pd
-import torch
-import os
-import random
-
 from data_preprocess import data_preprocess
-
+from datasets import DatasetDict
 from tqdm import tqdm
+from itertools import product
+from typing import Union
 
-from data_preprocess.data_preprocess import corpus_to_hf_dataset
 
-def load_model(checkpoint_path: str) -> tuple[AutoModelForSequenceClassification, AutoTokenizer]:
+def load_model(checkpoint_path: str) -> Union[AutoModelForSequenceClassification, AutoTokenizer]:
     """
-    Loads a pre-trained model and tokenizer
+    Loads a pre-trained model and tokenizer.
 
-    Parameters
-    ----------
-        checkpoint_path (str) : The path to the pre-trained checkpoint
+    Args:
+        checkpoint_path (str): The path to the pre-trained checkpoint.
 
-    Returns
-    -------
-        Tuple[AutoModelForSequenceClassification, AutoTokenizer] : A tuple with the loaded model and tokenizer objects.
+    Returns:
+        Tuple[AutoModelForSequenceClassification, AutoTokenizer]: A tuple with the loaded model and tokenizer objects.
     """
     logging.set_verbosity_error()
     model = AutoModelForSequenceClassification.from_pretrained(checkpoint_path, num_labels=2)
@@ -39,19 +39,16 @@ def load_model(checkpoint_path: str) -> tuple[AutoModelForSequenceClassification
     # Return the loaded model and tokenizer as a tuple
     return model, tokenizer
 
-def compute_metrics(model_output) -> dict:
+
+def compute_metrics(model_output: tuple) -> dict:
     """
-    Compute the metrics of the model
+    Computes the metrics of the model.
 
-    Parameters
-    ----------
-        - model_output : `tuple`
-            Tuple with the predictions and the references
+    Args:
+        model_output (tuple): Tuple with the predictions and the references.
 
-    Returns
-    -------
-        - dict :
-            Dictionary with the metrics
+    Returns:
+        dict: Dictionary with the metrics.
     """
     # Load the metrics
     metric_f1 = evaluate.load('f1')
@@ -70,28 +67,23 @@ def compute_metrics(model_output) -> dict:
     }
     return results
 
+
 def preprocess_logits_for_metrics(predictions: torch.Tensor, labels: torch.Tensor) -> torch.Tensor:
-    # pylint: disable=unused-argument
     """
-    Preprocess logits for the metrics calculation. This step is needed to limit the total size of the
+    Preprocesses logits for the metrics calculation. This step is needed to limit the total size of the
     Tensors and reduce the memory profile.
 
-    Parameters
-    ----------
-    predictions : `torch.Tensor`
-        Model predictions
+    Args:
+        predictions (torch.Tensor): Model predictions.
+        labels (torch.Tensor): Labels.
 
-    labels : `torch.Tensor`
-        Labels
-
-    Returns
-    -------
-    torch.Tensor :
-        Preprocessed logits
+    Returns:
+        torch.Tensor: Preprocessed logits.
     """
     # Find the maximum index of the predictions along the last axis (axis=-1)
     predicted_labels = torch.argmax(predictions, axis=-1)
     return predicted_labels
+
 
 def total_steps_for_warmup(dataset, num_epochs: int,
                              num_batch_size: int) -> int:
@@ -113,9 +105,24 @@ def total_steps_for_warmup(dataset, num_epochs: int,
     """
     num_of_warmup_steps = int(((len(dataset)*num_epochs)//num_batch_size)*0.1)
     return num_of_warmup_steps
-def hp_search(model_name, train, dev, search_space):
+
+
+def hp_search(model_name: str, train: DatasetDict, dev: DatasetDict, search_space: dict) -> dict:
+    """
+    Performs a hyperparameter search on a model using a given training and development dataset.
+
+    Args:
+        model_name (str): The name of the model to train.
+        train (DatasetDict): The training dataset.
+        dev (DatasetDict): The development dataset used for validation during training.
+        search_space (dict): The hyperparameters to search over, in the form {'lr': [], 'epochs': [], 'batchsize': []}.
+
+    Returns:
+        dict: The best hyperparameters found, in the form {'lr': float, 'epochs': int, 'batchsize': int}.
+    """
     max_score = float('-inf')
     best_hyperparameter = {'lr':0, 'epochs':0, 'batchsize':0}
+    # Grid search
     for lr, epoch, batchsize in product(*search_space.values()):
         print(f'HP Search:\nLearning rate: {lr}\nEpoch: {epoch}\nBatchsize: {batchsize}')
         trial_hp = {'lr':lr, 'epochs':epoch, 'batchsize':batchsize}
@@ -128,7 +135,20 @@ def hp_search(model_name, train, dev, search_space):
             print(f'New best hyperparameters: {best_hyperparameter}')
     return best_hyperparameter
 
-def train_model(model_name, train, dev, hp):
+
+def train_model(model_name: str, train: DatasetDict, dev: DatasetDict, hp: dict) -> Trainer:
+    """
+    Trains a model on a given training and development dataset with specified hyperparameters.
+
+    Args:
+        model_name (str): The name of the model to train.
+        train (DatasetDict): The training dataset.
+        dev (DatasetDict): The development dataset used for validation during training.
+        hp (dict): The hyperparameters to use, in the form {'lr': float, 'epochs': int, 'batchsize': int}.
+
+    Returns:
+        Trainer: The trained model.
+    """
     model, tokenizer = load_model(model_name)
     
     trainer_params = {
@@ -166,13 +186,29 @@ def train_model(model_name, train, dev, hp):
     trainer.train(resume_from_checkpoint=False)
     return trainer
 
-def train_evaluate_model(model_name, train, dev, test, hp):
+
+def train_evaluate_model(model_name: str, train: DatasetDict, dev: DatasetDict, test: DatasetDict, hp: dict) -> dict:
+    """
+    Trains and evaluates a model on a given training, development, and test dataset with specified hyperparameters.
+
+    Args:
+        model_name (str): The name of the model to train.
+        train (DatasetDict): The training dataset.
+        dev (DatasetDict): The development dataset used for validation during training.
+        test (DatasetDict): The test dataset used for final evaluation.
+        hp (dict): The hyperparameters to use, in the form {'lr': float, 'epochs': int, 'batchsize': int}.
+
+    Returns:
+        dict: The results of the evaluation.
+    """
     trainer = trainer = train_model(model_name, train, dev, hp)
     trainer.eval_dataset = test
     result = trainer.evaluate()
     return result
 
+
 def main():
+    # Hyper-parameter search space
     hp_search_space = {
         'lr': [2e-5, 3e-5, 5e-5],
         'epochs': [2,3,4],
@@ -180,12 +216,14 @@ def main():
     }
     model_name = 'bert-base-multilingual-cased'
 
-    dataframe = pd.read_csv('dataset/binary_oversampling_filtered_ds_remove_discrepancies.csv')
+    # Data loading and pre-processing
+    dataframe = pd.read_csv('dataset/binary_undersampling_filtered_ds_remove_discrepancies.csv')
     tokenizer = AutoTokenizer.from_pretrained(model_name)
     dataset = data_preprocess.corpus_to_hf_dataset(dataframe, tokenizer)
 
     hyperparameters = hp_search(model_name, dataset['train'], dataset['validation'], hp_search_space)
     
+    # Traning
     print(f'Starting training with: {hyperparameters}')
     results = [train_evaluate_model(model_name, dataset['train'], 
                                     dataset['validation'], 
@@ -193,6 +231,7 @@ def main():
                                     hyperparameters)
                                     for _ in range(10)]
     
+    # Result formatting and file save
     print(results)
     results_df = pd.DataFrame(results)
     print(results_df.mean().T)
